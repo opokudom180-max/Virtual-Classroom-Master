@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState } from 'react';
@@ -97,8 +98,8 @@ export default function RegisterPage() {
                         className="cursor-pointer text-primary hover:underline"
                         onClick={() => router.push('/login')}
                     >
-            Login
-          </span>
+                        Login
+                    </span>
                 </p>
             </div>
         </div>
