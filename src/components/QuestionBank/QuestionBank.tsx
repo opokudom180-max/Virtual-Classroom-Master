@@ -1,30 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
-import { logEvent } from 'firebase/analytics';
-import { db, analytics } from '@/lib/firebase';
+import {
+    collection,
+    getDocs,
+    addDoc,
+    serverTimestamp,
+    query,
+    orderBy,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { QuestionBankChallenge, ChallengeResult } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { Input } from '@/components/ui/Input'; // ✅ Added
+import { Input } from '@/components/ui/Input';
 import {
-    BookOpen,
-    X,
-    Eye,
-    EyeOff,
     Archive,
-    RotateCcw,
-    Wifi,
-    Phone,
-    Camera,
-    Network,
-    Settings,
-    Calendar,
+    X,
+    Globe,
     BarChart3,
     Users,
-    Globe // ✅ Added
+    Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -45,7 +48,6 @@ export default function QuestionBank({ onClose }: QuestionBankProps) {
     const [fetchingQuestions, setFetchingQuestions] = useState(false);
 
     const categories = ['All', 'WIFI', 'VoIP', 'CCTV', 'LAN', 'Operations', 'Security'];
-    const currentYear = new Date().getFullYear();
 
     useEffect(() => {
         fetchQuestionBank();
@@ -99,7 +101,7 @@ export default function QuestionBank({ onClose }: QuestionBankProps) {
             // ✅ Save questions into Firestore
             for (const q of data.questions) {
                 await addDoc(collection(db, 'questionBankQuestions'), {
-                    challengeId: 'imported', // You can later link this to a challenge
+                    challengeId: 'imported',
                     questionText: q.questionText,
                     optionA: q.options?.[0] || '',
                     optionB: q.options?.[1] || '',
@@ -127,11 +129,10 @@ export default function QuestionBank({ onClose }: QuestionBankProps) {
         const averageScore = totalAttempts > 0
             ? Math.round(challengeResults.reduce((sum, r) => sum + r.score, 0) / totalAttempts)
             : 0;
-
         return { totalAttempts, averageScore };
     };
 
-    // ✅ Add this UI section right above “Filters”
+    // ✅ UI
     return (
         <Card className="shadow-xl border-2 border-primary/20">
             <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10">
@@ -176,6 +177,57 @@ export default function QuestionBank({ onClose }: QuestionBankProps) {
                     </p>
                 </div>
 
-                {/* ✅ Keep your filters and question cards below this section */}
-                {/* Filters and grid remain unchanged */}
-                {/* ...existing code below... */}
+                {/* ✅ Filters */}
+                <div className="flex flex-wrap gap-3 mb-6">
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        {categories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </Select>
+
+                    <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val as any)}>
+                        <option value="All">All Status</option>
+                        <option value="Published">Published</option>
+                        <option value="Draft">Draft</option>
+                    </Select>
+                </div>
+
+                {/* ✅ Challenge Grid */}
+                {loading ? (
+                    <p className="text-center text-gray-500">Loading question bank...</p>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {bankChallenges
+                            .filter(ch => (selectedCategory === 'All' || ch.category === selectedCategory))
+                            .filter(ch => (selectedStatus === 'All' || ch.status === selectedStatus))
+                            .map(challenge => {
+                                const { totalAttempts, averageScore } = getUsageStats(challenge.id);
+                                return (
+                                    <Card key={challenge.id} className="border hover:shadow-md transition">
+                                        <CardHeader>
+                                            <CardTitle className="text-lg font-semibold">{challenge.title}</CardTitle>
+                                            <CardDescription>{challenge.category}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-2 text-sm">
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <Calendar className="h-4 w-4" />
+                                                {format(challenge.createdAt, 'MMM d, yyyy')}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <Users className="h-4 w-4" />
+                                                {totalAttempts} attempts
+                                            </div>
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <BarChart3 className="h-4 w-4" />
+                                                Avg score: {averageScore}%
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
