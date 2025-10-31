@@ -3,14 +3,28 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {
+    doc,
+    setDoc,
+    serverTimestamp,
+    collection,
+    query,
+    where,
+    getDocs,
+} from 'firebase/firestore';
 import { logEvent } from 'firebase/analytics';
 import { auth, db, analytics } from '@/lib/firebase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Select } from '@/components/ui/Select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/Card';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -22,6 +36,13 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('');
     const [role, setRole] = useState<'intern' | 'supervisor'>('intern');
     const [loading, setLoading] = useState(false);
+
+    // Helper: checks if this is the first supervisor
+    const isFirstSupervisor = async (): Promise<boolean> => {
+        const q = query(collection(db, 'users'), where('role', '==', 'supervisor'));
+        const snapshot = await getDocs(q);
+        return snapshot.size === 0;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,17 +59,47 @@ export default function RegisterPage() {
 
         try {
             setLoading(true);
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+            // 🔹 Check supervisor limit
+            if (role === 'supervisor') {
+                const supervisorQuery = query(
+                    collection(db, 'users'),
+                    where('role', '==', 'supervisor')
+                );
+                const supervisorSnapshot = await getDocs(supervisorQuery);
+
+                if (supervisorSnapshot.size >= 2) {
+                    toast.error('Supervisor limit reached (maximum of 2).');
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // 🔹 Create Firebase Auth user
+            const userCredential = await createUserWithEmailAndPassword(
+                auth,
+                email,
+                password
+            );
             const user = userCredential.user;
 
+            // 🔹 Determine if this is the first supervisor
+            let isAdmin = false;
+            if (role === 'supervisor') {
+                const first = await isFirstSupervisor();
+                isAdmin = first; // make first supervisor admin
+            }
+
+            // 🔹 Save user data in Firestore
             await setDoc(doc(db, 'users', user.uid), {
                 name: name.trim(),
                 email: email.trim(),
                 role,
+                isAdmin,
                 createdAt: serverTimestamp(),
             });
 
-            // Log analytics event for successful registration
+            // 🔹 Log analytics event
             const analyticsInstance = await analytics;
             if (analyticsInstance) {
                 logEvent(analyticsInstance, 'sign_up', {
@@ -82,11 +133,13 @@ export default function RegisterPage() {
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
                     <Link href="/" className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded bg-primary">
-                            <span className="text-sm font-bold text-primary-foreground">DC</span>
+              <span className="text-sm font-bold text-primary-foreground">
+                DC
+              </span>
                         </div>
                         <span className="text-xl font-bold">Data Center E-Learning</span>
                     </Link>
-                    <ThemeToggle/>
+                    <ThemeToggle />
                 </div>
             </nav>
 
@@ -94,7 +147,9 @@ export default function RegisterPage() {
                 <Card className="w-full max-w-md">
                     <CardHeader>
                         <CardTitle className="text-2xl">Register</CardTitle>
-                        <CardDescription>Create your account to get started</CardDescription>
+                        <CardDescription>
+                            Create your account to get started
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -136,8 +191,13 @@ export default function RegisterPage() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="role">Role</Label>
-                                <Select id="role" value={role}
-                                        onChange={(e) => setRole(e.target.value as 'intern' | 'supervisor')}>
+                                <Select
+                                    id="role"
+                                    value={role}
+                                    onChange={(e) =>
+                                        setRole(e.target.value as 'intern' | 'supervisor')
+                                    }
+                                >
                                     <option value="intern">Intern</option>
                                     <option value="supervisor">Supervisor</option>
                                 </Select>
@@ -149,7 +209,10 @@ export default function RegisterPage() {
 
                             <p className="text-center text-sm text-muted-foreground">
                                 Already have an account?{' '}
-                                <Link href="/login" className="font-medium text-primary hover:underline">
+                                <Link
+                                    href="/login"
+                                    className="font-medium text-primary hover:underline"
+                                >
                                     Login here
                                 </Link>
                             </p>
